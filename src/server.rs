@@ -103,7 +103,7 @@ fn parse_data(msg: OpenMessage) -> NotificationData {
 	let summary  = msg.summary;
 	let body     = Some(msg.body)    .filter(|a| !a.is_empty());
 
-	let expire_timeout = u32::try_from(msg.expire_timeout).ok();
+	let timeout = u64::try_from(msg.expire_timeout).ok().map(|a| std::time::Duration::from_millis(a));
 	let actions = msg.actions
 		.chunks_exact(2)
 		.map(|a| if let [a, b] = a { (a.clone(), b.clone()) } else { unreachable!() })
@@ -121,10 +121,10 @@ fn parse_data(msg: OpenMessage) -> NotificationData {
 
 	NotificationData {
 		app_name,
-		summary,
+		title: summary,
 		body,
 		actions,
-		expire_timeout,
+		timeout,
 		image,
 		extra: hints
 	}

@@ -3,10 +3,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct NotificationData {
 	pub app_name: Option<String>,
-	pub summary: String,
+	pub title: String,
 	pub body: Option<String>,
 	pub actions: Vec<(String, String)>,
-	pub expire_timeout: Option<u32>,
+	pub timeout: Option<std::time::Duration>,
 	pub image: Option<Image>,
 	pub extra: HashMap<String, zbus::zvariant::OwnedValue>,
 }
