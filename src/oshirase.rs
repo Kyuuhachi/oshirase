@@ -119,7 +119,7 @@ const CSS: &'static str = r#"
 	margin-left: .5em;
 	margin-right: .5em;
 	padding: .5em;
-	min-width: 20em;
+	min-width: 30em;
 }
 
 #title {
@@ -191,6 +191,15 @@ fn make_widget(
 		body.show();
 	}
 
+	let image = match &data.image {
+		Some(Image::Pixbuf(pixbuf)) => build!(gtk::Image {
+			name: "image",
+			visible: true,
+			pixbuf: &pixbuf.scale_simple(80, 80, gdk_pixbuf::InterpType::Bilinear).unwrap(),
+		}),
+		_ => gtk::Image::new(),
+	};
+
 	let close = build!(gtk::Button {
 		name: "close",
 		visible: true,
@@ -225,7 +234,7 @@ fn make_widget(
 	}
 
 	let root = Box!(Horizontal;
-		// false: image,
+		false: &image,
 		true: &Box!(Vertical;
 			false: &title,
 			false: &body,
