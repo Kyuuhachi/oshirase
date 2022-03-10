@@ -7,13 +7,11 @@ pub struct Oshirase {
 	notifications: BTreeMap<u32, Notification>,
 }
 
-struct Notification {
-	window: gtk::Window,
-}
+struct Notification(gtk::Window);
 
 impl Drop for Notification {
 	fn drop(&mut self) {
-		unsafe { self.window.destroy() };
+		unsafe { self.0.destroy() };
 	}
 }
 
@@ -41,17 +39,19 @@ impl Display for Oshirase {
 	}
 
 	fn open(&mut self, id: u32, data: NotificationData) {
-		let notif = self.notifications.entry(id).or_insert_with(|| new_notification());
+		self.notifications.remove(&id);
 
 		let events = self.events.clone();
-		notif.window.add(&make_widget(
+		let window = new_notification();
+		window.add(&make_widget(
 			&data,
 			move |e| {
 				events.send((id, e)).unwrap()
 			}
 		));
-		notif.window.resize(1, 1);
-		notif.window.show();
+		window.resize(1, 1);
+		window.show();
+		self.notifications.insert(id, Notification(window));
 		self.reflow();
 	}
 
@@ -69,7 +69,7 @@ impl Oshirase {
 	fn reflow(&self) {
 		let mut y = 0;
 		// Currently does not handle multiple monitors
-		for win in self.notifications.values().filter_map(|n| n.window.window()) {
+		for win in self.notifications.values().filter_map(|n| n.0.window()) {
 			if let Some(mon) = win.display().monitor_at_window(&win) {
 				let w = mon.geometry().width() * mon.scale_factor();
 				win.move_(w - win.width(), y);
@@ -93,29 +93,27 @@ macro_rules! build {
 	};
 }
 
-fn new_notification() -> Notification {
-	let window = build!(gtk::Window {
-		visible: false,
-		type_hint: gtk::gdk::WindowTypeHint::Notification,
-		decorated: false,
-		app_paintable: true,
-	});
+fn new_notification() -> gtk::Window {
+	build!(
+		window@gtk::Window {
+			visible: false,
+			type_hint: gtk::gdk::WindowTypeHint::Notification,
+			decorated: false,
+			app_paintable: true,
+		};
 
-	fn set_rgba_visual(window: &gtk::Window) {
-		if let Some(screen) = window.screen() {
-			window.set_visual(screen.rgba_visual().as_ref());
+		fn set_rgba_visual(window: &gtk::Window) {
+			if let Some(screen) = window.screen() {
+				window.set_visual(screen.rgba_visual().as_ref());
+			}
 		}
-	}
-	window.connect_screen_changed(|win, _| set_rgba_visual(win));
-	set_rgba_visual(&window);
+		window.connect_screen_changed(|win, _| set_rgba_visual(win));
+		set_rgba_visual(&window);
 
-	window.connect_realize(|win| win.window().unwrap().set_override_redirect(true));
+		window.connect_realize(|win| win.window().unwrap().set_override_redirect(true));
 
-	setup_window(&window);
-
-	Notification {
-		window
-	}
+		setup_window(&window);
+	)
 }
 
 const CSS: &'static str = r#"
