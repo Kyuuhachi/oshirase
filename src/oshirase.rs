@@ -80,11 +80,7 @@ impl Display for Oshirase {
 		self.notifications.remove(&id);
 
 		let events = self.events.clone();
-		let window = new_notification();
-		window.add(&make_widget(&data, move |e| { events.send((id, e)).unwrap() }));
-		window.resize(1, 1);
-		window.show();
-		self.notifications.insert(id, Notification(window));
+		self.notifications.insert(id, make_notification(&data, move |e| { events.send((id, e)).unwrap() }));
 		self.reflow();
 	}
 
@@ -124,6 +120,17 @@ macro_rules! build {
 			$(.$key($val))*
 			.build()
 	};
+}
+
+fn make_notification(
+	data: &NotificationData,
+	callback: impl Fn(Event) + 'static + Clone,
+) -> Notification {
+	let window = new_notification();
+	window.add(&make_widget(&data, callback));
+	window.resize(1, 1);
+	window.show();
+	Notification(window)
 }
 
 fn new_notification() -> gtk::Window {
