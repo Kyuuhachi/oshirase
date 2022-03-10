@@ -156,7 +156,6 @@ pub async fn main<T: Display + 'static>() -> Result<(), Box<dyn std::error::Erro
 				.interface::<_, NotificationServer>("/org/freedesktop/Notifications").await.unwrap();
 			let server = server_ref.get().await;
 			let ctx = server_ref.signal_context();
-			println!("{:?}", event);
 			match event {
 				Event::Action(a) => {
 					server.action_invoked(ctx, id, &a).await.unwrap()

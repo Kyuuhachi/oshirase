@@ -54,8 +54,7 @@ impl Display for Oshirase {
 		self.reflow();
 	}
 
-	fn close(&mut self, id: u32, reason: CloseReason) -> bool {
-		println!("close({}, {:?})", id, reason);
+	fn close(&mut self, id: u32, _reason: CloseReason) -> bool {
 		if self.notifications.remove(&id).is_some() {
 			self.reflow();
 			true
