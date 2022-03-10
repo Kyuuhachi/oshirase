@@ -171,12 +171,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	dbus_rx.attach(Some(&main_context), move |msg| {
 		match msg {
-			Message::Open(id, msg) => {
-				oshirase.open(id, parse_data(msg));
-			}
-			Message::Close(id) => {
-				oshirase.close(id);
-			}
+			Message::Open(id, msg) => oshirase.open(id, parse_data(msg)),
+			Message::Close(id) => oshirase.close(id),
 		}
 		glib::Continue(true)
 	});
