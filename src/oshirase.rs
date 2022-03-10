@@ -2,6 +2,44 @@ use std::collections::BTreeMap;
 use gtk::prelude::*;
 use crate::types::*;
 
+const CSS: &'static str = r#"
+#notification {
+	background-color: rgba(0,0,0,0.7);
+	border-radius: .5em;
+	margin-top: .5em;
+	margin-left: .5em;
+	margin-right: .5em;
+	padding: .5em;
+	min-width: 30em;
+}
+
+#title {
+	font-weight: bold;
+	font-size: 125%;
+}
+
+#image {
+	padding-right: .5em;
+}
+
+#actions {
+	border-left: 1px solid rgba(255,255,255,0.3);
+	padding-left: .5em;
+}
+
+button {
+	padding: 0;
+	min-width: 0;
+	background: none;
+	border: none;
+}
+
+button:not(:hover) {
+	opacity: 0.4;
+	border: none;
+}
+"#;
+
 pub struct Oshirase {
 	events: glib::Sender<(u32, Event)>,
 	notifications: BTreeMap<u32, Notification>,
@@ -43,12 +81,7 @@ impl Display for Oshirase {
 
 		let events = self.events.clone();
 		let window = new_notification();
-		window.add(&make_widget(
-			&data,
-			move |e| {
-				events.send((id, e)).unwrap()
-			}
-		));
+		window.add(&make_widget(&data, move |e| { events.send((id, e)).unwrap() }));
 		window.resize(1, 1);
 		window.show();
 		self.notifications.insert(id, Notification(window));
@@ -95,7 +128,7 @@ macro_rules! build {
 
 fn new_notification() -> gtk::Window {
 	build!(
-		window@gtk::Window {
+		win@gtk::Window {
 			visible: false,
 			type_hint: gtk::gdk::WindowTypeHint::Notification,
 			decorated: false,
@@ -107,55 +140,12 @@ fn new_notification() -> gtk::Window {
 				window.set_visual(screen.rgba_visual().as_ref());
 			}
 		}
-		window.connect_screen_changed(|win, _| set_rgba_visual(win));
-		set_rgba_visual(&window);
+		win.connect_screen_changed(|win, _| set_rgba_visual(win));
+		set_rgba_visual(&win);
 
-		window.connect_realize(|win| win.window().unwrap().set_override_redirect(true));
-
-		setup_window(&window);
+		win.connect_realize(|win| win.window().unwrap().set_override_redirect(true));
+		win.connect_draw(|win, _| { win.window().unwrap().set_child_input_shapes(); Inhibit(false) });
 	)
-}
-
-const CSS: &'static str = r#"
-#notification {
-	background-color: rgba(0,0,0,0.7);
-	border-radius: .5em;
-	margin-top: .5em;
-	margin-left: .5em;
-	margin-right: .5em;
-	padding: .5em;
-	min-width: 30em;
-}
-
-#title {
-	font-weight: bold;
-	font-size: 125%;
-}
-
-#image {
-	padding-right: .5em;
-}
-
-#actions {
-	border-left: 1px solid rgba(255,255,255,0.3);
-	padding-left: .5em;
-}
-
-button {
-	padding: 0;
-	min-width: 0;
-	background: none;
-	border: none;
-}
-
-button:not(:hover) {
-	opacity: 0.4;
-	border: none;
-}
-"#;
-
-fn setup_window(window: &gtk::Window) {
-	window.connect_draw(|window, _| { window.window().unwrap().set_child_input_shapes(); Inhibit(false) });
 }
 
 fn ebox(child: &impl glib::IsA<gtk::Widget>) -> gtk::EventBox {
