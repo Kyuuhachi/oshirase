@@ -12,4 +12,3 @@ gtk  = "0.15"
 gdk-pixbuf = "0.15"
 zbus = "2.1"
 async-std = { version = "1.10", features = ["attributes"] }
-serde = "1.0"

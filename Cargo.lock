@@ -933,7 +933,6 @@ dependencies = [
  "gidle_future",
  "glib 0.15.8",
  "gtk",
- "serde",
  "zbus",
 ]
 
