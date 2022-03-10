@@ -30,3 +30,18 @@ pub enum CloseReason {
 	Closed = 3,
 	Other = 4,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct Properties {
+	pub name: &'static str,
+	pub vendor: &'static str,
+	pub version: &'static str,
+	pub capabilities: &'static [&'static str],
+}
+
+pub trait Display {
+	const PROPERTIES: Properties;
+	fn new(events: glib::Sender<(u32, Event)>) -> Self;
+	fn open(&mut self, id: u32, data: NotificationData);
+	fn close(&mut self, id: u32);
+}
