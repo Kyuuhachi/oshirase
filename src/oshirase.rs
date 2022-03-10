@@ -80,10 +80,15 @@ impl Oshirase {
 }
 
 macro_rules! build {
-	($name:ty { $($key:ident: $val:expr),* $(,)? }) => {{
+	($name:ty { $($key:ident: $val:expr),* $(,)? } $(; $e:expr)* $(;)?) => {{
 		let v = <$name>::builder();
 		$(let v = v.$key($val);)*
-		v.build()
+		let v = v.build();
+		$({
+			fn q<T>(f: impl FnOnce(&$name) -> T, x: &$name) -> T { f(x) }
+			q($e, &v);
+		})*
+		v
 	}};
 }
 
@@ -154,17 +159,15 @@ fn setup_window(window: &gtk::Window) {
 }
 
 macro_rules! Box {
-	($orient:ident; $($fill:ident: $child:expr),* $(,)?) => { {
-		let _b = build!(gtk::Box { orientation: gtk::Orientation::$orient, visible: true });
-		$(_b.pack_start($child, $fill, $fill, 0);)*
-		_b
-	} };
+	($orient:ident; $($fill:ident: $child:expr),* $(,)?) => {
+		build!(gtk::Box { orientation: gtk::Orientation::$orient, visible: true }; |a| {
+			$(a.pack_start($child, $fill, $fill, 0);)*
+		})
+	};
 }
 
 fn ebox(child: &impl glib::IsA<gtk::Widget>) -> gtk::EventBox {
-	let b = build!(gtk::EventBox { visible: true });
-	b.add(child);
-	b
+	build!(gtk::EventBox { visible: true }; |a| a.add(child))
 }
 
 fn make_widget(
@@ -176,16 +179,14 @@ fn make_widget(
 		visible: true,
 		xalign: 0.,
 		label: &data.title,
-	});
-	title.set_line_wrap(true);
+	}; |a| a.set_line_wrap(true));
 
 	let body = build!(gtk::Label {
 		name: "body",
 		visible: data.body.is_some(),
 		xalign: 0.,
 		use_markup: true,
-	});
-	body.set_line_wrap(true);
+	}; |a| a.set_line_wrap(true));
 	if let Some(body_t) = &data.body {
 		body.set_markup(body_t);
 		body.show();
@@ -207,30 +208,29 @@ fn make_widget(
 		visible: true,
 		relief: gtk::ReliefStyle::None,
 		image: &gtk::Image::from_icon_name(Some("window-close"), gtk::IconSize::Button),
-	});
-	close.connect_clicked(glib::clone!(@strong callback =>
+	}; |a| a.connect_clicked(glib::clone!(@strong callback =>
 		move |_| callback(Event::Close(CloseReason::Dismissed))
-	));
+	)));
 
 	let actions = build!(gtk::Box {
 		name: "actions",
 		visible: !data.actions.is_empty(),
 		orientation: gtk::Orientation::Vertical,
-		valign: gtk::Align::End
-	});
-	actions.style_context().add_class("linked");
+		halign: gtk::Align::End,
+		valign: gtk::Align::End,
+	}; |a| a.style_context().add_class("linked"));
+	
 	for (k, v) in &data.actions {
-		let v = v.to_owned();
-		let btn = build!(gtk::Button {
+		actions.pack_start(&ebox(&build!(gtk::Button {
 			label: &k,
 			visible: true,
 			relief: gtk::ReliefStyle::None,
-		});
-		btn.connect_clicked(glib::clone!(@strong callback =>
-			move |_| callback(Event::Action(v.clone()))
-		));
-		btn.style_context().add_class("action");
-		actions.pack_start(&ebox(&btn), false, false, 0);
+		}; |btn| {
+			btn.connect_clicked(glib::clone!(@strong callback, @strong v =>
+				move |_| callback(Event::Action(v.clone()))
+			));
+			btn.style_context().add_class("action");
+		})), false, false, 0);
 	}
 
 	let root = Box!(Horizontal;
