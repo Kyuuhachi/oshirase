@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct NotificationData {
-	pub app_name: String,
+	pub app_name: Option<String>,
 	pub summary: String,
-	pub body: String,
+	pub body: Option<String>,
 	pub actions: Vec<(String, String)>,
 	pub expire_timeout: Option<u32>,
 	pub urgency: u8,

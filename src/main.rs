@@ -97,7 +97,12 @@ fn image_data(value: zbus::zvariant::OwnedValue) -> Option<Image> {
 
 fn parse_data(msg: OpenMessage) -> NotificationData {
 	let mut hints = msg.hints;
-	let app_icon = if !msg.app_icon.is_empty() { Some(msg.app_icon) } else { None };
+
+	let app_name = Some(msg.app_name).filter(|a| !a.is_empty());
+	let app_icon = Some(msg.app_icon).filter(|a| !a.is_empty());
+	let summary  = msg.summary;
+	let body     = Some(msg.body)    .filter(|a| !a.is_empty());
+
 	let expire_timeout = u32::try_from(msg.expire_timeout).ok();
 	let actions = msg.actions
 		.chunks_exact(2)
@@ -117,9 +122,9 @@ fn parse_data(msg: OpenMessage) -> NotificationData {
 	;
 
 	NotificationData {
-		app_name: msg.app_name,
-		summary: msg.summary,
-		body: msg.body,
+		app_name,
+		summary,
+		body,
 		actions,
 		expire_timeout,
 		urgency,
