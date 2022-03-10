@@ -1,50 +1,25 @@
 use std::collections::HashMap;
 
-use gtk::prelude::*;
+mod oshirase;
+mod notification;
+
+use notification::*;
 
 #[derive(Debug)]
 enum Message {
-	Open(u32, NotifyData),
+	Open(u32, OpenMessage),
 	Close(u32),
 }
 
 #[derive(Debug)]
-struct NotifyData {
+struct OpenMessage {
 	app_name: String,
+	app_icon: String,
 	summary: String,
 	body: String,
 	actions: Vec<String>,
-	expire_timeout: Option<u32>,
-
-	urgency: u8,
-	image: Option<Image>,
-	extra: HashMap<String, zbus::zvariant::OwnedValue>,
-}
-
-#[derive(Debug)]
-enum Image {
-	Path(String),
-	Data(ImageData),
-}
-
-
-#[derive(Debug, zbus::zvariant::Value, zbus::zvariant::OwnedValue)]
-struct ImageData {
-	width: i32,
-	height: i32,
-	rowstride: i32,
-	has_alpha: bool,
-	bits_per_sample: i32,
-	channels: i32,
-	data: Vec<u8>,
-}
-
-#[derive(serde::Serialize, Debug, Clone, Copy, zbus::zvariant::Type)]
-enum CloseReason {
-	Expired = 1,
-	Dismissed = 2,
-	Closed = 3,
-	Other = 4,
+	hints: HashMap<String, zbus::zvariant::OwnedValue>,
+	expire_timeout: i32,
 }
 
 #[derive(Debug)]
@@ -73,35 +48,15 @@ impl OshiraseServer {
 		expire_timeout: i32,
 	) -> u32 {
 		let id = if replaces_id == 0 { self.0 += 1; self.0 } else { replaces_id };
-
-		let mut hints = hints;
-		let app_icon = if !app_icon.is_empty() { Some(app_icon) } else { None };
-		let expire_timeout = u32::try_from(expire_timeout).ok();
-
-		let urgency: u8 = hints.remove("urgency").and_then(|a| u8::try_from(a).ok()).unwrap_or(1);
-
-		// Slightly inefficient if multiple exist, but I want to remove them all from the map
-		let image = None
-			.or(hints.remove("image-data").and_then(|a| ImageData::try_from(a).ok()).map(|a| Image::Data(a)))
-			.or(hints.remove("image_data").and_then(|a| ImageData::try_from(a).ok()).map(|a| Image::Data(a)))
-			.or(hints.remove("image-path").and_then(|a| String   ::try_from(a).ok()).map(|a| Image::Path(a)))
-			.or(hints.remove("image_path").and_then(|a| String   ::try_from(a).ok()).map(|a| Image::Path(a)))
-			.or(app_icon                  .and_then(|a| String   ::try_from(a).ok()).map(|a| Image::Path(a)))
-			.or(hints.remove("icon_data") .and_then(|a| ImageData::try_from(a).ok()).map(|a| Image::Data(a)))
-		;
-
-		let data = NotifyData {
+		self.1.send(Message::Open(id, OpenMessage {
 			app_name,
+			app_icon,
 			summary,
 			body,
 			actions,
+			hints,
 			expire_timeout,
-
-			urgency,
-			image,
-			extra: hints
-		};
-		self.1.send(Message::Open(id, data)).unwrap();
+		})).unwrap();
 		id
 	}
 
@@ -110,28 +65,88 @@ impl OshiraseServer {
 	}
 
 	#[dbus_interface(signal)]
-	async fn notification_closed(&self, ctx: &zbus::SignalContext<'_>, id: u32, reason: CloseReason) -> zbus::Result<()>;
+	async fn notification_closed(&self, ctx: &zbus::SignalContext<'_>, id: u32, reason: u32) -> zbus::Result<()>;
 
 	#[dbus_interface(signal)]
 	async fn action_invoked(&self, ctxt: &zbus::SignalContext<'_>, id: u32, action: &str) -> zbus::Result<()>;
 }
 
+fn parse_data(msg: OpenMessage) -> NotificationData {
+	let mut hints = msg.hints;
+	let app_icon = if !msg.app_icon.is_empty() { Some(msg.app_icon) } else { None };
+	let expire_timeout = u32::try_from(msg.expire_timeout).ok();
+	let actions = msg.actions
+		.chunks_exact(2)
+		.map(|a| if let [a, b] = a { (a.clone(), b.clone()) } else { unreachable!() })
+		.collect::<Vec<_>>();
+
+	let urgency: u8 = hints.remove("urgency").and_then(|a| u8::try_from(a).ok()).unwrap_or(1);
+
+	// Slightly inefficient if multiple exist, but I want to remove them all from the map
+	let image = None
+		.or(hints.remove("image-data").and_then(|a| ImageData::try_from(a).ok()).map(|a| Image::Data(a)))
+		.or(hints.remove("image_data").and_then(|a| ImageData::try_from(a).ok()).map(|a| Image::Data(a)))
+		.or(hints.remove("image-path").and_then(|a| String   ::try_from(a).ok()).map(|a| Image::Path(a)))
+		.or(hints.remove("image_path").and_then(|a| String   ::try_from(a).ok()).map(|a| Image::Path(a)))
+		.or(app_icon                  .and_then(|a| String   ::try_from(a).ok()).map(|a| Image::Path(a)))
+		.or(hints.remove("icon_data") .and_then(|a| ImageData::try_from(a).ok()).map(|a| Image::Data(a)))
+	;
+
+	NotificationData {
+		app_name: msg.app_name,
+		summary: msg.summary,
+		body: msg.body,
+		actions,
+		expire_timeout,
+		urgency,
+		image,
+		extra: hints
+	}
+}
+
+
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let main_context = glib::MainContext::default();
 	let _context = main_context.acquire()?;
-	let (tx, rx) = glib::MainContext::channel::<Message>(glib::PRIORITY_DEFAULT);
 	gtk::init()?;
 
-	let server = zbus::ConnectionBuilder::session()?
-		.name("org.freedesktop.Notifications")?
-		.serve_at("/org/freedesktop/Notifications", OshiraseServer(0, tx))?
-		.build().await?
-		.object_server()
-		.interface::<_, OshiraseServer>("/org/freedesktop/Notifications").await?;
+	let (dbus_tx, dbus_rx) = glib::MainContext::channel::<Message>(glib::PRIORITY_DEFAULT);
+	let (action_tx, action_rx) = glib::MainContext::channel::<(u32, Event)>(glib::PRIORITY_DEFAULT);
 
-	rx.attach(Some(&main_context), move |msg| {
+	let conn = zbus::ConnectionBuilder::session()?
+		.name("org.freedesktop.Notifications")?
+		.serve_at("/org/freedesktop/Notifications", OshiraseServer(0, dbus_tx))?
+		.build().await?;
+
+	action_rx.attach(Some(&main_context), glib::clone!(@strong conn => move |(id, event)| {
+		let conn = conn.clone();
+		gidle_future::spawn(async move {
+			let server_ref = conn
+				.object_server()
+				.interface::<_, OshiraseServer>("/org/freedesktop/Notifications").await.unwrap();
+			let server = server_ref.get().await;
+			let ctx = server_ref.signal_context();
+			match event {
+				Event::Action(a) => server.action_invoked(ctx, id, &a).await.unwrap(),
+				Event::Close(r) => server.notification_closed(ctx, id, r as u32).await.unwrap(),
+			}
+		});
+		glib::Continue(true)
+	}));
+
+	let mut oshirase = oshirase::Oshirase::new(action_tx);
+
+	dbus_rx.attach(Some(&main_context), move |msg| {
 		println!("{:?}", msg);
+		match msg {
+			Message::Open(id, msg) => {
+				oshirase.open(id, parse_data(msg));
+			}
+			Message::Close(id) => {
+				oshirase.close(id);
+			}
+		}
 		glib::Continue(true)
 	});
 
