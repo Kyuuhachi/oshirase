@@ -79,7 +79,6 @@ impl Display for Oshirase {
 
 	fn open(&mut self, id: u32, data: NotificationData) {
 		self.notifications.remove(&id);
-
 		let events = self.events.clone();
 		self.notifications.insert(id, make_notification(&data, move |e| { events.send((id, e)).unwrap() }));
 		self.reflow();
@@ -154,7 +153,6 @@ fn make_notification(
 	));
 
 	win.add(&make_widget(&data, callback));
-
 	win.resize(1, 1);
 	win.show();
 	Notification(win, timeout_source)
