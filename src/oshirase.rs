@@ -126,15 +126,7 @@ fn make_notification(
 	data: &NotificationData,
 	callback: impl Fn(Event) + 'static + Clone,
 ) -> Notification {
-	let window = new_notification();
-	window.add(&make_widget(&data, callback));
-	window.resize(1, 1);
-	window.show();
-	Notification(window)
-}
-
-fn new_notification() -> gtk::Window {
-	build!(
+	let window = build!(
 		win@gtk::Window {
 			visible: false,
 			type_hint: gtk::gdk::WindowTypeHint::Notification,
@@ -152,7 +144,11 @@ fn new_notification() -> gtk::Window {
 
 		win.connect_realize(|win| win.window().unwrap().set_override_redirect(true));
 		win.connect_draw(|win, _| { win.window().unwrap().set_child_input_shapes(); Inhibit(false) });
-	)
+	);
+	window.add(&make_widget(&data, callback));
+	window.resize(1, 1);
+	window.show();
+	Notification(window)
 }
 
 fn ebox(child: &impl glib::IsA<gtk::Widget>) -> gtk::EventBox {
