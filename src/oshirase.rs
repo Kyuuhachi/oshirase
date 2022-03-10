@@ -5,6 +5,11 @@ pub struct Oshirase {
 }
 
 impl Oshirase {
+	pub const NAME: &'static str = "Oshirase";
+	pub const VENDOR: &'static str = "Kyuuhachi";
+	pub const VERSION: &'static str = "0.1";
+	pub const CAPABILITIES: &'static [&'static str] = &["actions", "body", "body-markup", "icon-static"];
+
 	pub fn new(events: glib::Sender<(u32, Event)>) -> Self {
 		Self {
 			events,

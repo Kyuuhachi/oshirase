@@ -28,14 +28,13 @@ struct OshiraseServer(u32, glib::Sender<Message>);
 #[zbus::dbus_interface(name = "org.freedesktop.Notifications")]
 impl OshiraseServer {
 	async fn get_server_information(&self) -> (&str, &str, &str, &str) {
-		("Oshirase", "Kyuuhachi", "0.1", "1.1")
+		(oshirase::Oshirase::NAME, oshirase::Oshirase::VERSION, oshirase::Oshirase::VERSION, "1.2")
 	}
 
 	async fn get_capabilities(&self) -> &[&str] {
-		&["actions", "body", "body-markup", "icon-static"]
+		oshirase::Oshirase::CAPABILITIES
 	}
 
-	// This is type (susssasa{sv}i) rather than susssasa{sv}i, but it seems to work.
 	async fn notify(
 		&mut self,
 		app_name: String,
