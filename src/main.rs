@@ -31,11 +31,11 @@ struct OshiraseServer {
 #[zbus::dbus_interface(name = "org.freedesktop.Notifications")]
 impl OshiraseServer {
 	async fn get_server_information(&self) -> (&str, &str, &str, &str) {
-		(oshirase::Oshirase::NAME, oshirase::Oshirase::VENDOR, oshirase::Oshirase::VERSION, "1.2")
+		(oshirase::NAME, oshirase::VENDOR, oshirase::VERSION, "1.2")
 	}
 
 	async fn get_capabilities(&self) -> &[&str] {
-		oshirase::Oshirase::CAPABILITIES
+		oshirase::CAPABILITIES
 	}
 
 	async fn notify(
