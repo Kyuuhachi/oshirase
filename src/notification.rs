@@ -15,18 +15,7 @@ pub struct NotificationData {
 #[derive(Debug, Clone)]
 pub enum Image {
 	Path(String),
-	Data(ImageData),
-}
-
-#[derive(Debug, zbus::zvariant::Value, Clone, zbus::zvariant::OwnedValue)]
-pub struct ImageData {
-	pub width: i32,
-	pub height: i32,
-	pub rowstride: i32,
-	pub has_alpha: bool,
-	pub bits_per_sample: i32,
-	pub channels: i32,
-	pub data: Vec<u8>,
+	Pixbuf(gdk_pixbuf::Pixbuf),
 }
 
 pub enum Event {

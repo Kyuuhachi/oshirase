@@ -71,6 +71,30 @@ impl OshiraseServer {
 	async fn action_invoked(&self, ctxt: &zbus::SignalContext<'_>, id: u32, action: &str) -> zbus::Result<()>;
 }
 
+fn image_data(value: zbus::zvariant::OwnedValue) -> Option<Image> {
+	#[derive(Debug, zbus::zvariant::Value, Clone, zbus::zvariant::OwnedValue)]
+	pub struct ImageData {
+		pub width: i32,
+		pub height: i32,
+		pub rowstride: i32,
+		pub has_alpha: bool,
+		pub bits_per_sample: i32,
+		pub channels: i32,
+		pub data: Vec<u8>,
+	}
+
+	let data = ImageData::try_from(value).ok()?;
+	Some(Image::Pixbuf(gdk_pixbuf::Pixbuf::from_bytes(
+		&glib::Bytes::from_owned(data.data),
+		gdk_pixbuf::Colorspace::Rgb,
+		data.has_alpha,
+		data.bits_per_sample,
+		data.width,
+		data.height,
+		data.rowstride
+	)))
+}
+
 fn parse_data(msg: OpenMessage) -> NotificationData {
 	let mut hints = msg.hints;
 	let app_icon = if !msg.app_icon.is_empty() { Some(msg.app_icon) } else { None };
@@ -84,12 +108,12 @@ fn parse_data(msg: OpenMessage) -> NotificationData {
 
 	// Slightly inefficient if multiple exist, but I want to remove them all from the map
 	let image = None
-		.or(hints.remove("image-data").and_then(|a| ImageData::try_from(a).ok()).map(|a| Image::Data(a)))
-		.or(hints.remove("image_data").and_then(|a| ImageData::try_from(a).ok()).map(|a| Image::Data(a)))
-		.or(hints.remove("image-path").and_then(|a| String   ::try_from(a).ok()).map(|a| Image::Path(a)))
-		.or(hints.remove("image_path").and_then(|a| String   ::try_from(a).ok()).map(|a| Image::Path(a)))
-		.or(app_icon                  .and_then(|a| String   ::try_from(a).ok()).map(|a| Image::Path(a)))
-		.or(hints.remove("icon_data") .and_then(|a| ImageData::try_from(a).ok()).map(|a| Image::Data(a)))
+		.or(hints.remove("image-data").and_then(|a| image_data(a)))
+		.or(hints.remove("image_data").and_then(|a| image_data(a)))
+		.or(hints.remove("image-path").and_then(|a| String::try_from(a).ok()).map(|a| Image::Path(a)))
+		.or(hints.remove("image_path").and_then(|a| String::try_from(a).ok()).map(|a| Image::Path(a)))
+		.or(app_icon                  .and_then(|a| String::try_from(a).ok()).map(|a| Image::Path(a)))
+		.or(hints.remove("icon_data") .and_then(|a| image_data(a)))
 	;
 
 	NotificationData {
@@ -138,7 +162,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let mut oshirase = oshirase::Oshirase::new(action_tx);
 
 	dbus_rx.attach(Some(&main_context), move |msg| {
-		println!("{:?}", msg);
 		match msg {
 			Message::Open(id, msg) => {
 				oshirase.open(id, parse_data(msg));
