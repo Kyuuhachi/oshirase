@@ -1,16 +1,20 @@
-use std::{collections::BTreeMap, rc::Rc, cell::RefCell};
+use std::collections::BTreeMap;
 use gtk::prelude::*;
 use crate::types::*;
 
-type Notifications = Rc<RefCell<BTreeMap<u32, Notification>>>;
-
 pub struct Oshirase {
 	events: glib::Sender<(u32, Event)>,
-	notifications: Notifications,
+	notifications: BTreeMap<u32, Notification>,
 }
 
 struct Notification {
 	window: gtk::Window,
+}
+
+impl Drop for Notification {
+	fn drop(&mut self) {
+		unsafe { self.window.destroy() };
+	}
 }
 
 impl Display for Oshirase {
@@ -37,31 +41,38 @@ impl Display for Oshirase {
 	}
 
 	fn open(&mut self, id: u32, data: NotificationData) {
-		let mut notifications = self.notifications.borrow_mut();
-		notifications.entry(id).or_insert_with(|| new_notification(&self.notifications));
-		drop(notifications);
+		let notif = self.notifications.entry(id).or_insert_with(|| new_notification());
 
-		let notifications = self.notifications.borrow();
-		let notif = notifications.get(&id).unwrap();
-		notif.window.add(&make_widget(&data));
+		let events = self.events.clone();
+		notif.window.add(&make_widget(
+			&data,
+			move |e| {
+				events.send((id, e)).unwrap()
+			}
+		));
 		notif.window.show();
+		self.reflow();
 	}
 
-	fn close(&mut self, id: u32) {
-		if let Some(_notif) = self.notifications.borrow_mut().remove(&id) {
-			self.events.send((id, Event::Close(CloseReason::Closed))).unwrap();
-		}
+	fn close(&mut self, id: u32, reason: CloseReason) -> bool {
+		println!("close({}, {:?})", id, reason);
+		if self.notifications.remove(&id).is_some() {
+			self.reflow();
+			true
+		} else { false }
 	}
 }
 
-fn reflow(notifs: &Notifications) {
-	let mut y = 0;
-	// Currently does not handle multiple monitors
-	for win in notifs.borrow().values().filter_map(|n| n.window.window()) {
-		if let Some(mon) = win.display().monitor_at_window(&win) {
-			let w = mon.geometry().width() * mon.scale_factor();
-			win.move_(w - win.width(), y);
-			y += win.height();
+impl Oshirase {
+	fn reflow(&self) {
+		let mut y = 0;
+		// Currently does not handle multiple monitors
+		for win in self.notifications.values().filter_map(|n| n.window.window()) {
+			if let Some(mon) = win.display().monitor_at_window(&win) {
+				let w = mon.geometry().width() * mon.scale_factor();
+				win.move_(w - win.width(), y);
+				y += win.height();
+			}
 		}
 	}
 }
@@ -74,7 +85,7 @@ macro_rules! build {
 	}};
 }
 
-fn new_notification(notifs: &Notifications) -> Notification {
+fn new_notification() -> Notification {
 	let window = build!(gtk::Window {
 		type_hint: gtk::gdk::WindowTypeHint::Notification,
 		decorated: false,
@@ -90,9 +101,6 @@ fn new_notification(notifs: &Notifications) -> Notification {
 	set_rgba_visual(&window);
 
 	window.connect_realize(|win| win.window().unwrap().set_override_redirect(true));
-
-	window.connect_show(glib::clone!(@weak notifs => move |_| reflow(&notifs)));
-	window.connect_hide(glib::clone!(@weak notifs => move |_| reflow(&notifs)));
 
 	setup_window(&window);
 
@@ -143,7 +151,10 @@ fn setup_window(window: &gtk::Window) {
 	window.connect_draw(|window, _| { window.window().unwrap().set_child_input_shapes(); Inhibit(false) });
 }
 
-fn make_widget(data: &NotificationData) -> impl glib::IsA<gtk::Widget> {
+fn make_widget(
+	data: &NotificationData,
+	callback: impl Fn(Event) + 'static + Clone,
+) -> impl glib::IsA<gtk::Widget> {
 	let title = build!(gtk::Label {
 		name: "title",
 		visible: true,
@@ -172,6 +183,9 @@ fn make_widget(data: &NotificationData) -> impl glib::IsA<gtk::Widget> {
 		relief: gtk::ReliefStyle::None,
 		image: &gtk::Image::from_icon_name(Some("window-close"), gtk::IconSize::Button),
 	});
+	close.connect_clicked(glib::clone!(@strong callback =>
+		move |_| callback(Event::Close(CloseReason::Dismissed))
+	));
 	let close = { let b = build!(gtk::EventBox { visible: true }); b.add(&close); b };
 
 	let actions = build!(gtk::Box {

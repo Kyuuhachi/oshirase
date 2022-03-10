@@ -17,6 +17,7 @@ pub enum Image {
 	Pixbuf(gdk_pixbuf::Pixbuf),
 }
 
+#[derive(Debug, Clone)]
 pub enum Event {
 	Action(String),
 	Close(CloseReason),
@@ -42,5 +43,5 @@ pub trait Display {
 	const PROPERTIES: Properties;
 	fn new(events: glib::Sender<(u32, Event)>) -> Self;
 	fn open(&mut self, id: u32, data: NotificationData);
-	fn close(&mut self, id: u32);
+	fn close(&mut self, id: u32, reason: CloseReason) -> bool;
 }

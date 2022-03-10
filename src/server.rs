@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc, cell::RefCell};
 
 use crate::types::*;
 
@@ -144,28 +144,37 @@ pub async fn main<T: Display + 'static>() -> Result<(), Box<dyn std::error::Erro
 		.serve_at("/org/freedesktop/Notifications", server)?
 		.build().await?;
 
+	let display = Rc::new(RefCell::new(T::new(action_tx.clone())));
+	let display2 = display.clone();
+
 	action_rx.attach(Some(&main_context), move |(id, event)| {
 		let conn = conn.clone();
+		let display = display.clone();
 		gidle_future::spawn(async move {
 			let server_ref = conn
 				.object_server()
 				.interface::<_, NotificationServer>("/org/freedesktop/Notifications").await.unwrap();
 			let server = server_ref.get().await;
 			let ctx = server_ref.signal_context();
+			println!("{:?}", event);
 			match event {
-				Event::Action(a) => server.action_invoked(ctx, id, &a).await.unwrap(),
-				Event::Close(r) => server.notification_closed(ctx, id, r as u32).await.unwrap(),
+				Event::Action(a) => {
+					server.action_invoked(ctx, id, &a).await.unwrap()
+				}
+				Event::Close(r) => {
+					if display.borrow_mut().close(id, r) {
+						server.notification_closed(ctx, id, r as u32).await.unwrap()
+					}
+				}
 			}
 		});
 		glib::Continue(true)
 	});
 
-	let mut display = T::new(action_tx);
-
 	dbus_rx.attach(Some(&main_context), move |msg| {
 		match msg {
-			Message::Open(id, msg) => display.open(id, parse_data(msg)),
-			Message::Close(id) => display.close(id),
+			Message::Open(id, msg) => display2.borrow_mut().open(id, parse_data(msg)),
+			Message::Close(id) => action_tx.send((id, Event::Close(CloseReason::Closed))).unwrap(),
 		}
 		glib::Continue(true)
 	});
