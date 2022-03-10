@@ -160,14 +160,6 @@ fn setup_window(window: &gtk::Window) {
 	window.connect_draw(|window, _| { window.window().unwrap().set_child_input_shapes(); Inhibit(false) });
 }
 
-macro_rules! Box {
-	($orient:ident; $($fill:ident: $child:expr),* $(,)?) => {
-		build!(gtk::Box { orientation: gtk::Orientation::$orient }; |a| {
-			$(a.pack_start($child, $fill, $fill, 0);)*
-		})
-	};
-}
-
 fn ebox(child: &impl glib::IsA<gtk::Widget>) -> gtk::EventBox {
 	build!(gtk::EventBox {}; |a| a.add(child))
 }
@@ -230,17 +222,15 @@ fn make_widget(
 		})), false, false, 0);
 	}
 
-	let root = Box!(Horizontal;
-		false: &image,
-		true: &Box!(Vertical;
-			false: &title,
-			false: &body,
-		),
-		false: &Box!(Vertical;
-			false: &ebox(&close),
-			true: &actions,
-		),
-	);
-	root.set_widget_name("notification");
-	root
+	build!(gtk::Box { name: "notification", orientation: gtk::Orientation::Horizontal }; |a| {
+		a.pack_start(&image, false, false, 0);
+		a.pack_start(&build!(gtk::Box { orientation: gtk::Orientation::Vertical }; |a| {
+			a.pack_start(&title, false, false, 0);
+			a.pack_start(&body, false, false, 0);
+		}), true, true, 0);
+		a.pack_start(&build!(gtk::Box { orientation: gtk::Orientation::Vertical }; |a| {
+			a.pack_start(&ebox(&close), false, false, 0);
+			a.pack_end(&actions, false, false, 0);
+		}), false, false, 0);
+	})
 }
