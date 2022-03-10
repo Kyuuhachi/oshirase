@@ -109,8 +109,6 @@ fn parse_data(msg: OpenMessage) -> NotificationData {
 		.map(|a| if let [a, b] = a { (a.clone(), b.clone()) } else { unreachable!() })
 		.collect::<Vec<_>>();
 
-	let urgency: u8 = hints.remove("urgency").and_then(|a| u8::try_from(a).ok()).unwrap_or(1);
-
 	// Slightly inefficient if multiple exist, but I want to remove them all from the map
 	let image = None
 		.or(hints.remove("image-data").and_then(|a| image_data(a)))
@@ -127,7 +125,6 @@ fn parse_data(msg: OpenMessage) -> NotificationData {
 		body,
 		actions,
 		expire_timeout,
-		urgency,
 		image,
 		extra: hints
 	}

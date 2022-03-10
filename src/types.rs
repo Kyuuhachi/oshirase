@@ -7,7 +7,6 @@ pub struct NotificationData {
 	pub body: Option<String>,
 	pub actions: Vec<(String, String)>,
 	pub expire_timeout: Option<u32>,
-	pub urgency: u8,
 	pub image: Option<Image>,
 	pub extra: HashMap<String, zbus::zvariant::OwnedValue>,
 }
