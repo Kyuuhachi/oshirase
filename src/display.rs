@@ -9,13 +9,13 @@ pub struct Oshirase {
 	events: glib::Sender<(u32, Event)>,
 }
 
-impl Oshirase {
-	pub fn new(events: glib::Sender<(u32, Event)>) -> Self {
-		Self {
-			events,
-		}
+pub fn new(events: glib::Sender<(u32, Event)>) -> Oshirase {
+	Oshirase {
+		events,
 	}
+}
 
+impl Oshirase {
 	pub fn open(&mut self, id: u32, data: NotificationData) {
 		println!("open({:?}, {:?}", id, data);
 	}

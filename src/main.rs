@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-mod oshirase;
+mod display;
 mod notification;
 
 use notification::*;
@@ -23,19 +23,19 @@ struct OpenMessage {
 }
 
 #[derive(Debug)]
-struct OshiraseServer {
+struct NotificationServer {
 	next_id: u32,
 	sender: glib::Sender<Message>,
 }
 
 #[zbus::dbus_interface(name = "org.freedesktop.Notifications")]
-impl OshiraseServer {
+impl NotificationServer {
 	async fn get_server_information(&self) -> (&str, &str, &str, &str) {
-		(oshirase::NAME, oshirase::VENDOR, oshirase::VERSION, "1.2")
+		(display::NAME, display::VENDOR, display::VERSION, "1.2")
 	}
 
 	async fn get_capabilities(&self) -> &[&str] {
-		oshirase::CAPABILITIES
+		display::CAPABILITIES
 	}
 
 	async fn notify(
@@ -144,7 +144,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let (dbus_tx, dbus_rx) = glib::MainContext::channel::<Message>(glib::PRIORITY_DEFAULT);
 	let (action_tx, action_rx) = glib::MainContext::channel::<(u32, Event)>(glib::PRIORITY_DEFAULT);
-	let server = OshiraseServer { next_id: 0, sender: dbus_tx };
+	let server = NotificationServer { next_id: 0, sender: dbus_tx };
 
 	let conn = zbus::ConnectionBuilder::session()?
 		.name("org.freedesktop.Notifications")?
@@ -156,7 +156,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		gidle_future::spawn(async move {
 			let server_ref = conn
 				.object_server()
-				.interface::<_, OshiraseServer>("/org/freedesktop/Notifications").await.unwrap();
+				.interface::<_, NotificationServer>("/org/freedesktop/Notifications").await.unwrap();
 			let server = server_ref.get().await;
 			let ctx = server_ref.signal_context();
 			match event {
@@ -167,12 +167,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		glib::Continue(true)
 	});
 
-	let mut oshirase = oshirase::Oshirase::new(action_tx);
+	let mut display = display::new(action_tx);
 
 	dbus_rx.attach(Some(&main_context), move |msg| {
 		match msg {
-			Message::Open(id, msg) => oshirase.open(id, parse_data(msg)),
-			Message::Close(id) => oshirase.close(id),
+			Message::Open(id, msg) => display.open(id, parse_data(msg)),
+			Message::Close(id) => display.close(id),
 		}
 		glib::Continue(true)
 	});
