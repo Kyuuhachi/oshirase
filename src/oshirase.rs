@@ -45,11 +45,12 @@ pub struct Oshirase {
 	notifications: BTreeMap<u32, Notification>,
 }
 
-struct Notification(gtk::Window);
+struct Notification(gtk::Window, Option<glib::SourceId>);
 
 impl Drop for Notification {
 	fn drop(&mut self) {
 		unsafe { self.0.destroy() };
+		if let Some(a) = self.1.take() { a.remove(); }
 	}
 }
 
@@ -136,11 +137,27 @@ fn make_notification(
 	win.connect_realize(|win| win.window().unwrap().set_override_redirect(true));
 	win.connect_draw(|win, _| { win.window().unwrap().set_child_input_shapes(); Inhibit(false) });
 
+	let urgency: u8 = data.extra.get("urgency").and_then(|a| u8::try_from(a).ok()).unwrap_or(1);
+	let timeout = data.timeout.or_else(|| match urgency {
+		0 => Some(std::time::Duration::from_secs_f32(3.5)),
+		1 => Some(std::time::Duration::from_secs_f32(5.0)),
+		_ => None,
+	});
+
+	let timeout_source = timeout.map(|t| glib::timeout_add_local(t,
+		glib::clone!(@strong callback => move || {
+			callback(Event::Close(CloseReason::Expired));
+			Continue(true)
+			// It'll be removed when the notif is dropped.
+			// Removing it here causes a panic because it's elready gone when it's dropped.
+		})
+	));
+
 	win.add(&make_widget(&data, callback));
 
 	win.resize(1, 1);
 	win.show();
-	Notification(win)
+	Notification(win, timeout_source)
 }
 
 fn ebox(child: &impl glib::IsA<gtk::Widget>) -> gtk::EventBox {
