@@ -81,9 +81,10 @@ impl Oshirase {
 
 macro_rules! build {
 	($name:ty { $($key:ident: $val:expr),* $(,)? } $(; $e:expr)* $(;)?) => {{
-		let v = <$name>::builder();
-		$(let v = v.$key($val);)*
-		let v = v.build();
+		let v = <$name>::builder()
+			.visible(true)
+			$(.$key($val))*
+			.build();
 		$({
 			fn q<T>(f: impl FnOnce(&$name) -> T, x: &$name) -> T { f(x) }
 			q($e, &v);
@@ -94,6 +95,7 @@ macro_rules! build {
 
 fn new_notification() -> Notification {
 	let window = build!(gtk::Window {
+		visible: false,
 		type_hint: gtk::gdk::WindowTypeHint::Notification,
 		decorated: false,
 		app_paintable: true,
@@ -160,14 +162,14 @@ fn setup_window(window: &gtk::Window) {
 
 macro_rules! Box {
 	($orient:ident; $($fill:ident: $child:expr),* $(,)?) => {
-		build!(gtk::Box { orientation: gtk::Orientation::$orient, visible: true }; |a| {
+		build!(gtk::Box { orientation: gtk::Orientation::$orient }; |a| {
 			$(a.pack_start($child, $fill, $fill, 0);)*
 		})
 	};
 }
 
 fn ebox(child: &impl glib::IsA<gtk::Widget>) -> gtk::EventBox {
-	build!(gtk::EventBox { visible: true }; |a| a.add(child))
+	build!(gtk::EventBox {}; |a| a.add(child))
 }
 
 fn make_widget(
@@ -176,7 +178,6 @@ fn make_widget(
 ) -> impl glib::IsA<gtk::Widget> {
 	let title = build!(gtk::Label {
 		name: "title",
-		visible: true,
 		xalign: 0.,
 		label: &data.title,
 	}; |a| a.set_line_wrap(true));
@@ -195,7 +196,6 @@ fn make_widget(
 	let image = match &data.image {
 		Some(Image::Pixbuf(pixbuf)) => build!(gtk::Image {
 			name: "image",
-			visible: true,
 			pixbuf: &pixbuf.scale_simple(80, 80, gdk_pixbuf::InterpType::Bilinear).unwrap(),
 		}),
 		_ => gtk::Image::new(),
@@ -203,9 +203,7 @@ fn make_widget(
 
 	let close = build!(gtk::Button {
 		name: "close",
-		visible: true,
 		halign: gtk::Align::End,
-		visible: true,
 		relief: gtk::ReliefStyle::None,
 		image: &gtk::Image::from_icon_name(Some("window-close"), gtk::IconSize::Button),
 	}; |a| a.connect_clicked(glib::clone!(@strong callback =>
@@ -223,7 +221,6 @@ fn make_widget(
 	for (k, v) in &data.actions {
 		actions.pack_start(&ebox(&build!(gtk::Button {
 			label: &k,
-			visible: true,
 			relief: gtk::ReliefStyle::None,
 		}; |btn| {
 			btn.connect_clicked(glib::clone!(@strong callback, @strong v =>
