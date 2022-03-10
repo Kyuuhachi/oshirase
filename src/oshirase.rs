@@ -80,17 +80,17 @@ impl Oshirase {
 }
 
 macro_rules! build {
-	($name:ty { $($key:ident: $val:expr),* $(,)? } $(; $e:expr)* $(;)?) => {{
-		let v = <$name>::builder()
+	($var:ident @ $name:ty { $($key:ident: $val:expr),* $(,)? }; $($init:tt)*) => {{
+		let $var = build!($name { $($key: $val),* });
+		{ $($init)* }
+		$var
+	}};
+	($name:ty { $($key:ident: $val:expr),* $(,)? }) => {
+		<$name>::builder()
 			.visible(true)
 			$(.$key($val))*
-			.build();
-		$({
-			fn q<T>(f: impl FnOnce(&$name) -> T, x: &$name) -> T { f(x) }
-			q($e, &v);
-		})*
-		v
-	}};
+			.build()
+	};
 }
 
 fn new_notification() -> Notification {
@@ -161,7 +161,7 @@ fn setup_window(window: &gtk::Window) {
 }
 
 fn ebox(child: &impl glib::IsA<gtk::Widget>) -> gtk::EventBox {
-	build!(gtk::EventBox {}; |a| a.add(child))
+	build!(a@gtk::EventBox {}; a.add(child))
 }
 
 fn make_widget(
@@ -169,27 +169,27 @@ fn make_widget(
 	callback: impl Fn(Event) + 'static + Clone,
 ) -> impl glib::IsA<gtk::Widget> {
 	let title = build!(
-		gtk::Label {
+		a@gtk::Label {
 			name: "title",
 			xalign: 0.,
 			label: &data.title,
 		};
-		|a| a.set_line_wrap(true);
+		a.set_line_wrap(true);
 	);
 
 	let body = build!(
-		gtk::Label {
+		a@gtk::Label {
 			name: "body",
 			visible: data.body.is_some(),
 			xalign: 0.,
 			use_markup: true,
 		};
-		|a| a.set_line_wrap(true);
+		a.set_line_wrap(true);
+		if let Some(body_t) = &data.body {
+			a.set_markup(body_t);
+			a.show();
+		}
 	);
-	if let Some(body_t) = &data.body {
-		body.set_markup(body_t);
-		body.show();
-	}
 
 	let image = match &data.image {
 		Some(Image::Pixbuf(pixbuf)) => build!(gtk::Image {
@@ -200,50 +200,51 @@ fn make_widget(
 	};
 
 	let close = build!(
-		gtk::Button {
+		a@gtk::Button {
 			name: "close",
 			halign: gtk::Align::End,
 			relief: gtk::ReliefStyle::None,
 			image: &gtk::Image::from_icon_name(Some("window-close"), gtk::IconSize::Button),
 		};
-		|a| a.connect_clicked(glib::clone!(@strong callback =>
+		a.connect_clicked(glib::clone!(@strong callback =>
 			move |_| callback(Event::Close(CloseReason::Dismissed))
 		));
 	);
 
 	let actions = build!(
-		gtk::Box {
+		a@gtk::Box {
 			name: "actions",
 			visible: !data.actions.is_empty(),
 			orientation: gtk::Orientation::Vertical,
 			halign: gtk::Align::End,
 			valign: gtk::Align::End,
 		};
-		|a| a.style_context().add_class("linked");
+		a.style_context().add_class("linked");
 	);
 	
 	data.actions.iter().map(|(k, v)| build!(
-		gtk::Button {
+		a@gtk::Button {
 			label: &k,
 			relief: gtk::ReliefStyle::None,
 		};
-		|a| a.connect_clicked(glib::clone!(@strong callback, @strong v =>
+		a.connect_clicked(glib::clone!(@strong callback, @strong v =>
 			move |_| callback(Event::Action(v.clone()))
 		));
-		|a| a.style_context().add_class("action");
+		a.style_context().add_class("action");
 	)).for_each(|a| actions.pack_start(&ebox(&a), false, false, 0));
 
-	build!(gtk::Box { name: "notification", orientation: gtk::Orientation::Horizontal }; |a| {
+	build!(
+		a@gtk::Box { name: "notification", orientation: gtk::Orientation::Horizontal };
 		a.pack_start(&image, false, false, 0);
 		a.pack_start(&build!(
-			gtk::Box { orientation: gtk::Orientation::Vertical };
-			|a| a.pack_start(&title, false, false, 0);
-			|a| a.pack_start(&body, false, false, 0);
+			a@gtk::Box { orientation: gtk::Orientation::Vertical };
+			a.pack_start(&title, false, false, 0);
+			a.pack_start(&body, false, false, 0);
 		), true, true, 0);
 		a.pack_start(&build!(
-			gtk::Box { orientation: gtk::Orientation::Vertical };
-			|a| a.pack_start(&ebox(&close), false, false, 0);
-			|a| a.pack_end(&actions, false, false, 0);
+			a@gtk::Box { orientation: gtk::Orientation::Vertical };
+			a.pack_start(&ebox(&close), false, false, 0);
+			a.pack_end(&actions, false, false, 0);
 		), false, false, 0);
-	})
+	)
 }
