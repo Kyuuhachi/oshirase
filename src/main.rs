@@ -151,7 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.serve_at("/org/freedesktop/Notifications", server)?
 		.build().await?;
 
-	action_rx.attach(Some(&main_context), glib::clone!(@strong conn => move |(id, event)| {
+	action_rx.attach(Some(&main_context), move |(id, event)| {
 		let conn = conn.clone();
 		gidle_future::spawn(async move {
 			let server_ref = conn
@@ -165,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 			}
 		});
 		glib::Continue(true)
-	}));
+	});
 
 	let mut oshirase = oshirase::Oshirase::new(action_tx);
 
