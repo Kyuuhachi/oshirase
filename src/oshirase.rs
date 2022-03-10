@@ -50,6 +50,7 @@ impl Display for Oshirase {
 				events.send((id, e)).unwrap()
 			}
 		));
+		notif.window.resize(1, 1);
 		notif.window.show();
 		self.reflow();
 	}
@@ -58,7 +59,9 @@ impl Display for Oshirase {
 		if self.notifications.remove(&id).is_some() {
 			self.reflow();
 			true
-		} else { false }
+		} else {
+			false
+		}
 	}
 }
 
@@ -178,7 +181,7 @@ fn make_widget(
 
 	let body = build!(gtk::Label {
 		name: "body",
-		visible: true,
+		visible: data.body.is_some(),
 		xalign: 0.,
 		use_markup: true,
 	});
