@@ -23,7 +23,10 @@ struct OpenMessage {
 }
 
 #[derive(Debug)]
-struct OshiraseServer(u32, glib::Sender<Message>);
+struct OshiraseServer {
+	next_id: u32,
+	sender: glib::Sender<Message>,
+}
 
 #[zbus::dbus_interface(name = "org.freedesktop.Notifications")]
 impl OshiraseServer {
@@ -46,8 +49,8 @@ impl OshiraseServer {
 		hints: HashMap<String, zbus::zvariant::OwnedValue>,
 		expire_timeout: i32,
 	) -> u32 {
-		let id = if replaces_id == 0 { self.0 += 1; self.0 } else { replaces_id };
-		self.1.send(Message::Open(id, OpenMessage {
+		let id = if replaces_id == 0 { self.next_id += 1; self.next_id } else { replaces_id };
+		self.sender.send(Message::Open(id, OpenMessage {
 			app_name,
 			app_icon,
 			summary,
@@ -60,7 +63,7 @@ impl OshiraseServer {
 	}
 
 	async fn close_notification(&self, id: u32) {
-		self.1.send(Message::Close(id)).unwrap();
+		self.sender.send(Message::Close(id)).unwrap();
 	}
 
 	#[dbus_interface(signal)]
@@ -141,10 +144,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let (dbus_tx, dbus_rx) = glib::MainContext::channel::<Message>(glib::PRIORITY_DEFAULT);
 	let (action_tx, action_rx) = glib::MainContext::channel::<(u32, Event)>(glib::PRIORITY_DEFAULT);
+	let server = OshiraseServer { next_id: 0, sender: dbus_tx };
 
 	let conn = zbus::ConnectionBuilder::session()?
 		.name("org.freedesktop.Notifications")?
-		.serve_at("/org/freedesktop/Notifications", OshiraseServer(0, dbus_tx))?
+		.serve_at("/org/freedesktop/Notifications", server)?
 		.build().await?;
 
 	action_rx.attach(Some(&main_context), glib::clone!(@strong conn => move |(id, event)| {
