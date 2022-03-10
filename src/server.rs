@@ -106,7 +106,7 @@ fn parse_data(msg: OpenMessage) -> NotificationData {
 	let timeout = u64::try_from(msg.expire_timeout).ok().map(|a| std::time::Duration::from_millis(a));
 	let actions = msg.actions
 		.chunks_exact(2)
-		.map(|a| if let [a, b] = a { (a.clone(), b.clone()) } else { unreachable!() })
+		.map(|a| if let [a, b] = a { (b.clone(), a.clone()) } else { unreachable!() })
 		.collect::<Vec<_>>();
 
 	// Slightly inefficient if multiple exist, but I want to remove them all from the map

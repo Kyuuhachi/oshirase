@@ -150,6 +150,20 @@ fn setup_window(window: &gtk::Window) {
 	window.connect_draw(|window, _| { window.window().unwrap().set_child_input_shapes(); Inhibit(false) });
 }
 
+macro_rules! Box {
+	($orient:ident; $($fill:ident: $child:expr),* $(,)?) => { {
+		let _b = build!(gtk::Box { orientation: gtk::Orientation::$orient, visible: true });
+		$(_b.pack_start($child, $fill, $fill, 0);)*
+		_b
+	} };
+}
+
+fn ebox(child: &impl glib::IsA<gtk::Widget>) -> gtk::EventBox {
+	let b = build!(gtk::EventBox { visible: true });
+	b.add(child);
+	b
+}
+
 fn make_widget(
 	data: &NotificationData,
 	callback: impl Fn(Event) + 'static + Clone,
@@ -185,33 +199,37 @@ fn make_widget(
 	close.connect_clicked(glib::clone!(@strong callback =>
 		move |_| callback(Event::Close(CloseReason::Dismissed))
 	));
-	let close = { let b = build!(gtk::EventBox { visible: true }); b.add(&close); b };
 
 	let actions = build!(gtk::Box {
 		name: "actions",
-		visible: true,
+		visible: !data.actions.is_empty(),
 		orientation: gtk::Orientation::Vertical,
 		valign: gtk::Align::End
 	});
 	actions.style_context().add_class("linked");
-
-	macro_rules! Box {
-		($orient:ident; $($fill:ident: $child:expr),* $(,)?) => { {
-			let _b = build!(gtk::Box { orientation: gtk::Orientation::$orient, visible: true });
-			$(_b.pack_start(&$child, $fill, $fill, 0);)*
-			_b
-		} };
+	for (k, v) in &data.actions {
+		let v = v.to_owned();
+		let btn = build!(gtk::Button {
+			label: &k,
+			visible: true,
+			relief: gtk::ReliefStyle::None,
+		});
+		btn.connect_clicked(glib::clone!(@strong callback =>
+			move |_| callback(Event::Action(v.clone()))
+		));
+		btn.style_context().add_class("action");
+		actions.pack_start(&ebox(&btn), false, false, 0);
 	}
 
 	let root = Box!(Horizontal;
 		// false: image,
-		true: Box!(Vertical;
-			false: title,
-			false: body,
+		true: &Box!(Vertical;
+			false: &title,
+			false: &body,
 		),
-		false: Box!(Vertical;
-			false: close,
-			true: actions,
+		false: &Box!(Vertical;
+			false: &ebox(&close),
+			true: &actions,
 		),
 	);
 	root.set_widget_name("notification");
