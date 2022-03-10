@@ -134,14 +134,7 @@ fn make_notification(
 			app_paintable: true,
 		};
 
-		fn set_rgba_visual(window: &gtk::Window) {
-			if let Some(screen) = window.screen() {
-				window.set_visual(screen.rgba_visual().as_ref());
-			}
-		}
-		win.connect_screen_changed(|win, _| set_rgba_visual(win));
-		set_rgba_visual(&win);
-
+		win.set_visual(win.screen().unwrap().rgba_visual().as_ref());
 		win.connect_realize(|win| win.window().unwrap().set_override_redirect(true));
 		win.connect_draw(|win, _| { win.window().unwrap().set_child_input_shapes(); Inhibit(false) });
 	);
