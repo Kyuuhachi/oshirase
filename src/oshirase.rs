@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, rc::Rc, cell::RefCell};
 use gtk::prelude::*;
 use crate::types::*;
 
@@ -45,12 +45,11 @@ pub struct Oshirase {
 	notifications: BTreeMap<u32, Notification>,
 }
 
-struct Notification(gtk::Window, Option<glib::SourceId>);
+struct Notification(gtk::Window);
 
 impl Drop for Notification {
 	fn drop(&mut self) {
 		unsafe { self.0.destroy() };
-		if let Some(a) = self.1.take() { a.remove(); }
 	}
 }
 
@@ -143,19 +142,36 @@ fn make_notification(
 		_ => None,
 	});
 
-	let timeout_source = timeout.map(|t| glib::timeout_add_local(t,
-		glib::clone!(@strong callback => move || {
-			callback(Event::Close(CloseReason::Expired));
-			Continue(true)
-			// It'll be removed when the notif is dropped.
-			// Removing it here causes a panic because it's elready gone when it's dropped.
-		})
-	));
+	let timeout_source: Rc<RefCell<Option<glib::SourceId>>> = Default::default();
+
+	let end_timeout = glib::clone!(@strong timeout_source => move || {
+		if let Some(a) = timeout_source.take() { a.remove(); }
+	});
+
+	let start_timeout = glib::clone!(@strong timeout_source, @strong callback => move || {
+		*timeout_source.borrow_mut() = timeout.map(|t| glib::timeout_add_local_once(t,
+			glib::clone!(@strong callback, @strong timeout_source => move || {
+				callback(Event::Close(CloseReason::Expired));
+				timeout_source.take();
+			})
+		));
+	});
+
+	win.connect_enter_notify_event(glib::clone!(@strong end_timeout => move |_, _| {
+		end_timeout();
+		Inhibit(false)
+	}));
+	win.connect_leave_notify_event(glib::clone!(@strong start_timeout => move |_, _| {
+		start_timeout();
+		Inhibit(false)
+	}));
+
+	start_timeout();
 
 	win.add(&make_widget(&data, callback));
 	win.resize(1, 1);
 	win.show();
-	Notification(win, timeout_source)
+	Notification(win)
 }
 
 fn ebox(child: &impl glib::IsA<gtk::Widget>) -> gtk::EventBox {
