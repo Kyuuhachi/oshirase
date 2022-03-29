@@ -77,6 +77,8 @@ impl Display for Oshirase {
 	}
 
 	fn open(&mut self, id: u32, data: NotificationData) {
+		#[cfg(debug_assertions)]
+		println!("{} {:?}", id, data);
 		self.notifications.remove(&id);
 		let events = self.events.clone();
 		self.notifications.insert(id, make_notification(&data, move |e| { events.send((id, e)).unwrap() }));
